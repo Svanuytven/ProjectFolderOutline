@@ -1,0 +1,149 @@
+---
+title: "06b_sceG&T_seuratPCA"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Setup of the workenvironment
+
+## Set root directory for the rest of our analysis
+
+```{r "setup", include=FALSE}
+### Ignore code, this is used to set the workig directory. 
+rm(list=ls())
+t=getwd()
+tt=gsub('.{30}$', '', t)
+require("knitr")
+opts_knit$set(root.dir = tt)
+rm(t,tt)
+```
+
+## Load necessary libraries for the analysis
+
+```{r}
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+```
+
+## Parameters to specify
+
+```{r}
+Colourblind_palette <- c( "#E69F00" , "#56B4E9" , "#009E73" , "#F0E442" , "#0072B2" , "#D55E00" , "#CC79A7" , "#000000" )
+```
+
+## load Seurat object
+
+```{r}
+load(file="Data/GandT/RNA/SCEsets/Seurat.RData")
+```
+
+## PCA on the total dataset
+
+next we perform PCA on the scaled data. By default, the genes in object@var.genes are used as input, but can be alternatively defined. Running dimensionality reduction on highly variable genes can improve performance.
+
+```{r}
+bc.integrated <- RunPCA(bc.integrated, features = VariableFeatures(object = bc.integrated), seed.use = 13)
+```
+
+```{r}
+print(bc.integrated[["pca"]], dims = 1:5, nfeatures = 5)
+```
+
+## Vizualization of the PCA results
+
+### Plot of PC1 and PC2 coloured by Sample origin
+
+```{bash}
+cd Results/
+mkdir -p GandT/RNA/PCA
+```
+
+```{r}
+PCAPlot(
+  object = bc.integrated,
+  dims = c(2, 1),
+  cols = Colourblind_palette,
+  pt.size = 1.5,
+  group.by = "Sample")
+ggsave( "Results/GandT/RNA/PCA/PCA_1_2.png" , width = 10 , height = 5 )
+```
+
+### Plot of PC1 and PC3 coloured by Sample origin
+
+```{r}
+PCAPlot(
+  object = bc.integrated,
+  dims = c(3, 1),
+  cols = Colourblind_palette,
+  pt.size = 1.5,
+  group.by = "Sample")
+ggsave( "Results/GandT/RNA/PCA/PCA_1_3.png" , width = 10 , height = 5 )
+```
+
+### Plot of PC1 and PC2 coloured by number of expressed genes
+
+```{r}
+FeaturePlot(
+  object = bc.integrated,
+  features = c("nFeature_RNA"),
+  dims = c(2, 1),
+  pt.size = 1.5,
+  reduction = "pca")
+ggsave( "Results/GandT/RNA/PCA/PCA_1_2_exprGenes.png" , width = 10 , height = 5 )
+```
+
+### Plot of PC1 and PC2 coloured by number of expressed genes
+
+```{r}
+FeaturePlot(
+  object = bc.integrated,
+  features = c("nFeature_RNA"),
+  dims = c(3, 1),
+  pt.size = 1.5,
+  reduction = "pca")
+ggsave( "Results/GandT/RNA/PCA/PCA_1_3_exprGenes.png" , width = 10 , height = 5 )
+```
+
+## Correlation of number of expressed genes with principal components
+
+```{r}
+PCs_corrExpressedGenes <- vector(length = 10)
+for (i in 1:10) {
+  PCs_corrExpressedGenes[i] <- cor(bc.integrated@reductions$pca@cell.embeddings[,i] , bc.integrated@meta.data$nFeature_RNA )
+  names(PCs_corrExpressedGenes)[i] <- paste0("PC",i)
+}
+PCs_corrExpressedGenes
+```
+
+### Visualize top genes associated with principal components
+
+### Dotplot
+
+```{r}
+VizDimLoadings(bc.integrated, dims = 1:16, reduction = "pca" , ncol = 8, nfeatures = 50)
+ggsave( "Results/GandT/RNA/PCA/PCAdotplot_PC1-16.png" , width = 30 , height = 15 )
+```
+
+#### Heatmap
+
+Draws a heatmap focusing on a principal component. Both cells and genes are sorted by their principal component scores. Allows for nice visualization of sources of heterogeneity in the dataset.
+
+```{r}
+DimHeatmap(bc.integrated, dims = 1:16, cells = 500, balanced = TRUE, nfeatures = 50 , ncol = 8, fast = FALSE)
+ggsave( "Results/GandT/RNA/PCA/PCAheatmap_PC1-16.png" , width = 30 , height = 15 )
+```
+
+## Save Seurat Object
+
+```{r}
+save(bc.integrated,file="Data/GandT/RNA/SCEsets/Seurat.RData")
+```
+
+## Sesion information
+
+```{r}
+sessionInfo()
+```
+

@@ -1,0 +1,107 @@
+---
+title: "10b_sceG&T_seuratUMAP"
+author: "Sebastiaan Vanuytven"
+date: "28/08/2019"
+output: html_document
+---
+
+```{r "setup", include=FALSE}
+### Ignore code, this is used to set the workig directory. 
+rm(list=ls())
+t=getwd()
+tt=gsub('.{30}$', '', t)
+require("knitr")
+opts_knit$set(root.dir = tt)
+rm(t,tt)
+```
+
+## Load necessary libraries for the analysis
+
+```{r}
+library(Seurat)
+library(dplyr)
+library(viridis)
+```
+
+## Parameters to specify
+
+```{r}
+use.pcs = 1:7
+Colourblind_palette <- c( "#E69F00" , "#56B4E9" , "#009E73" , "#F0E442" , "#0072B2" , "#D55E00" , "#CC79A7" , "#000000" )
+```
+
+## load Seurat object
+
+```{r}
+load(file="Data/GandT/RNA/SCEsets/Seurat.RData")
+```
+
+## Run UMAP
+
+UMAP dimensionality reduction plots are then used to visualise clustering results. As input to the UMAP, you should use the same PCs as input to the clustering analysis.
+
+```{r}
+bc.integrated <- RunUMAP(
+  object = bc.integrated,
+  reduction = "pca",
+  dims = use.pcs,
+  verbose =  F)
+```
+
+## Vizualize UMAP
+
+```{bash}
+cd Results/
+mkdir -p GandT/RNA/UMAP
+```
+
+### Standard tSNE plot coloured by cluster
+
+```{r}
+DimPlot(object = bc.integrated, pt.size=3 , label = T , label.size = 12 , reduction = "umap")
+ggsave( "Results/GandT/RNA/UMAP/UMAP_standCol.png" , width = 10 , height = 5 )
+DimPlot(object = bc.integrated, pt.size=3 , cols = viridis(length(unique(bc.integrated@active.ident))) , label = T , label.size = 12 , reduction = "umap")
+ggsave( "Results/GandT/RNA/UMAP/UMAP_ViridisCol.png" , width = 10 , height = 5 )
+```
+
+### Standard tSNE plot coloured by Sample origin
+
+```{r}
+DimPlot(object = bc.integrated, pt.size=3 , cols = Colourblind_palette , group.by="Sample" , reduction = "umap" )
+ggsave( "Results/GandT/RNA/UMAP/UMAP_SampleOrigin.png" , width = 10 , height = 5 )
+
+DimPlot(object = bc.integrated, pt.size=3 , cols = Colourblind_palette , group.by="Sample" , reduction = "umap" )
+ggsave( "Results/GandT/RNA/UMAP/UMAP_SampleOrigin.png" , width = 10 , height = 5 )
+```
+
+### Standard tSNE plot coloured by cluster and shaped by sample origin
+
+```{r}
+DimPlot(object = bc.integrated, pt.size=3 , label = T , shape.by = "Sample", label.size = 12, reduction = "umap")
+ggsave( "Results/GandT/RNA/UMAPUMAP_standCol_shapeSource.png" , width = 10 , height = 5 )
+DimPlot(object = bc.integrated, pt.size=3 , cols = viridis(length(unique(bc.integrated@active.ident))) , label = T , shape.by = "Sample", label.size = 12, reduction = "umap")
+ggsave( "Results/GandT/RNA/UMAP/UMAP_ViridisCol_shapeSource.png" , width = 10 , height = 5 )
+```
+
+## TSNE plots coloured by each score of PC
+
+```{r}
+FeaturePlot(bc.integrated, features = c("PC_1", "PC_2", "PC_3", "PC_4", "PC_5", "PC_6", "PC_7", "PC_8", "PC_9", "PC_10") , combine = T)
+ggsave( "Results/GandT/RNA/UMAP/UMAP_PCscores.png" , width = 20 , height = 10 )
+```
+
+
+## Save Seurat Object
+
+```{r}
+save(bc.integrated,file="Data/GandT/RNA/SCEsets/Seurat.RData")
+```
+
+
+## Sesion information
+
+```{r}
+sessionInfo()
+```
+
+

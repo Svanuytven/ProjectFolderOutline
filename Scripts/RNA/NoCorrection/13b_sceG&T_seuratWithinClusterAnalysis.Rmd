@@ -1,0 +1,185 @@
+---
+title: "13b_sceG&T_seuratWithinClusterAnalysis"
+author: "Sebastiaan Vanuytven"
+date: "28/08/2019"
+output: html_document
+---
+
+```{r "setup", include=FALSE}
+### Ignore code, this is used to set the workig directory. 
+rm(list=ls())
+t=getwd()
+tt=gsub('.{30}$', '', t)
+require("knitr")
+opts_knit$set(root.dir = tt)
+rm(t,tt)
+```
+
+## Load necessary libraries for the analysis
+
+```{r}
+library(Seurat)
+library(dplyr)
+library(viridis)
+library(cowplot)
+```
+
+## Parameters to specify
+
+```{r}
+use.pcs = 1:7
+Colourblind_palette <- c( "#E69F00" , "#56B4E9" , "#009E73" , "#F0E442" , "#0072B2" , "#D55E00" , "#CC79A7" , "#000000" )
+```
+
+## load Seurat object
+
+```{r}
+load(file="Data/RNA/MEL006/SCEsets/Seurat_methodTimepoint.RData")
+```
+
+## Dimplots per timepoint and RNA cluster
+
+```{r}
+p1 <- DimPlot(bc.integrated, reduction = "tsne", split.by = "timepoint", pt.size = 4) + NoLegend()
+p2 <- DimPlot(bc.integrated, reduction = "tsne", label = TRUE, label.size = 6, pt.size = 4)
+plot_grid(p1, p2 , rel_widths=c(2.6,1) )
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/tSNE/TSNEbyTimepoint.png" , width = 25 , height = 10 )
+```
+
+```{r}
+p1 <- DimPlot(bc.integrated, reduction = "umap", split.by = "timepoint", pt.size = 4) + NoLegend()
+p2 <- DimPlot(bc.integrated, reduction = "umap", label = TRUE , label.size = 6, pt.size = 4)
+plot_grid(p1, p2 , rel_widths=c(2.6,1) )
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/UMAP/UMAPbyTimepoint.png" , width = 25 , height = 10 )
+```
+
+## Dimplots per timepoint and subclone
+
+```{r}
+p1 <- DimPlot(bc.integrated[,!is.na(bc.integrated@meta.data$ref)], reduction = "tsne", split.by = "timepoint", pt.size = 4, group.by = "ref") + NoLegend()
+p2 <- DimPlot(bc.integrated[,!is.na(bc.integrated@meta.data$ref)], reduction = "tsne", pt.size = 4, group.by = "ref")
+plot_grid(p1, p2 , rel_widths=c(1.7,1) )
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/tSNE/TSNEbyTimepointRef.png" , width = 25 , height = 10 )
+```
+
+```{r}
+p1 <- DimPlot(bc.integrated[,!is.na(bc.integrated@meta.data$ref)], reduction = "umap", split.by = "timepoint", pt.size = 4, group.by = "ref") + NoLegend()
+p2 <- DimPlot(bc.integrated[,!is.na(bc.integrated@meta.data$ref)], reduction = "umap", pt.size = 4, group.by = "ref")
+plot_grid(p1, p2 , rel_widths=c(1.7,1) )
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/UMAP/UMAPbyTimepointRef.png" , width = 25 , height = 10 )
+```
+
+
+## Dimplots per treatment
+
+```{r}
+p1 <- DimPlot(bc.integrated[,!is.na(bc.integrated@meta.data$ref)], reduction = "tsne", split.by = "ref", pt.size = 4) + NoLegend()
+p2 <- DimPlot(bc.integrated[,!is.na(bc.integrated@meta.data$ref)], reduction = "tsne", label = TRUE, label.size = 6, pt.size = 4)
+plot_grid(p1, p2 , rel_widths=c(2.6,1) )
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/tSNE/TSNEbySubclone.png" , width = 25 , height = 10 )
+```
+
+```{r}
+p1 <- DimPlot(bc.integrated[,!is.na(bc.integrated@meta.data$ref)], reduction = "umap", split.by = "ref", pt.size = 4) + NoLegend()
+p2 <- DimPlot(bc.integrated[,!is.na(bc.integrated@meta.data$ref)], reduction = "umap", label = TRUE , label.size = 6, pt.size = 4)
+plot_grid(p1, p2 , rel_widths=c(2.6,1) )
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/UMAP/UMAPbySubclone.png" , width = 25 , height = 10 )
+```
+
+
+## Identify differential expressed genes across timepoints
+
+```{bash}
+cd Results
+mkdir -p MEL006/RNA/Seurat/Method_timepoint/Markers/ClusterDifferentialExpression/Timepoint
+mkdir -p MEL006/RNA/Seurat/Method_timepoint/Markers/ClusterDifferentialExpression/Subclone
+```
+
+
+```{r include=FALSE}
+DefaultAssay(bc.integrated) <- "RNA"
+bc.integrated$celltype.treatment <- paste(Idents(bc.integrated), bc.integrated$timepoint, sep = "_")
+nrClusters <- length(unique(Idents(bc.integrated)))-1
+Idents(bc.integrated) <- "celltype.treatment"
+for (i in 0:nrClusters) {
+  a1 <- paste0(i,"_T0")
+  a2 <- paste0(i,"_T28")
+  name <- paste0("Cluster_",i)
+  bc.netrin.response <- FindMarkers(bc.integrated, ident.1 = a1, ident.2 = a2, verbose = FALSE)
+  colnames(bc.netrin.response)[3:4] <- c("pct.T0", "pct.T28")
+  write.table(bc.netrin.response, paste0("Results/MEL006/RNA/Seurat/Method_timepoint/Markers/ClusterDifferentialExpression/Timepoint/", name,
+                                            "_DifferentialExpressedGenesTimepoint.txt"), sep="\t")
+}
+```
+
+```{r}
+bc.integrated$ref.timepoint <- paste(bc.integrated$ref, bc.integrated$timepoint, sep = "_")
+Idents(bc.integrated) <- "ref.timepoint"
+for (i in unique(bc.integrated[,!is.na(bc.integrated@meta.data$ref)]$ref)) {
+  a1 <- paste0(i,"_T0")
+  a2 <- paste0(i,"_T28")
+  name <- paste0("Cluster_",i)
+  bc.netrin.response <- FindMarkers(bc.integrated, ident.1 = a1, ident.2 = a2, verbose = FALSE)
+  colnames(bc.netrin.response)[3:4] <- c("pct.T0", "pct.T28")
+  write.table(bc.netrin.response, paste0("Results/MEL006/RNA/Seurat/Method_timepoint/Markers/ClusterDifferentialExpression/Subclone/", name,
+                                            "_DifferentialExpressedGenesTimepoint.txt"), sep="\t")
+}
+```
+
+```{r include=FALSE}
+bc.integrated <- bc.integrated[,!is.na(bc.integrated@meta.data$ref)]
+unique(bc.integrated$ref)
+bc.integrated$ref1 <- "C2CN4_C7CN35|C2CN3_C7CN46"
+bc.integrated@meta.data[bc.integrated$ref == "400k_C2CN4_C7CN46", "ref1"] <-"C2CN4_C7CN46"
+table(bc.integrated$ref1)
+
+bc.integrated$ref2 <- "C2CN4_C7CN46|C2CN3_C7CN46"
+bc.integrated@meta.data[bc.integrated$ref == "400k_C2CN4_C7CN35", "ref2"] <-"C2CN4_C7CN35"
+table(bc.integrated$ref2)
+
+bc.integrated$ref3 <- "C2CN4_C7CN35|C2CN4_C7CN46"
+bc.integrated@meta.data[bc.integrated$ref == "400k_C2CN3_C7CN46", "ref3"] <-"C2CN3_C7CN46"
+table(bc.integrated$ref3)
+
+Idents(bc.integrated) <- bc.integrated$integrated_snn_res.0.6
+bc.integrated$celltype.subclone1 <- paste(Idents(bc.integrated), bc.integrated$ref1, sep = "_")
+nrClusters <- length(unique(Idents(bc.integrated)))-1
+Idents(bc.integrated) <- "celltype.subclone1"
+for (i in 0:nrClusters) {
+  a1 <- paste0(i,"_C2CN4_C7CN46")
+  a2 <- paste0(i,"_C2CN4_C7CN35|C2CN3_C7CN46")
+  name <- paste0("Cluster_",i)
+  bc.netrin.response <- FindMarkers(bc.integrated, ident.1 = a1, ident.2 = a2, verbose = FALSE)
+  colnames(bc.netrin.response)[3:4] <- c("pct.C2CN4_C7CN46", "pct.C2CN4_C7CN35|C2CN3_C7CN46")
+  write.table(bc.netrin.response, paste0("Results/MEL006/RNA/Seurat/Method_timepoint/Markers/ClusterDifferentialExpression/Subclone/", name,
+                                            "_DifferentialExpressedGenesRNAcluster_C2CN4_C7CN46.txt"), sep="\t")
+}
+
+Idents(bc.integrated) <- bc.integrated$integrated_snn_res.0.6
+bc.integrated$celltype.subclone2 <- paste(Idents(bc.integrated), bc.integrated$ref2, sep = "_")
+nrClusters <- length(unique(Idents(bc.integrated)))-1
+Idents(bc.integrated) <- "celltype.subclone2"
+for (i in 0:nrClusters) {
+  a1 <- paste0(i,"_C2CN3_C7CN46")
+  a2 <- paste0(i,"_C2CN4_C7CN35|C2CN4_C7CN46")
+  name <- paste0("Cluster_",i)
+  bc.netrin.response <- FindMarkers(bc.integrated, ident.1 = a1, ident.2 = a2, verbose = FALSE)
+  colnames(bc.netrin.response)[3:4] <- c("pct.C2CN3_C7CN46", "pct.C2CN4_C7CN35|C2CN4_C7CN46")
+  write.table(bc.netrin.response, paste0("Results/MEL006/RNA/Seurat/Method_timepoint/Markers/ClusterDifferentialExpression/Subclone/", name,
+                                            "_DifferentialExpressedGenesRNAcluster_C2CN4_C7CN35.txt"), sep="\t")
+}
+
+Idents(bc.integrated) <- bc.integrated$integrated_snn_res.0.6
+bc.integrated$celltype.subclone3 <- paste(Idents(bc.integrated), bc.integrated$ref3, sep = "_")
+nrClusters <- length(unique(Idents(bc.integrated)))-1
+Idents(bc.integrated) <- "celltype.subclone3"
+for (i in 0:nrClusters) {
+  a1 <- paste0(i,"_C2CN3_C7CN46")
+  a2 <- paste0(i,"_C2CN4_C7CN35|C2CN4_C7CN46")
+  name <- paste0("Cluster_",i)
+  bc.netrin.response <- FindMarkers(bc.integrated, ident.1 = a1, ident.2 = a2, verbose = FALSE)
+  colnames(bc.netrin.response)[3:4] <- c("pct.C2CN4_C7CN35", "pct.C2CN4_C7CN35|C2CN3_C7CN46")
+  write.table(bc.netrin.response, paste0("Results/MEL006/RNA/Seurat/Method_timepoint/Markers/ClusterDifferentialExpression/Subclone/", name,
+                                            "_DifferentialExpressedGenesRNAcluster_C2CN3_C7CN46.txt"), sep="\t")
+}
+```

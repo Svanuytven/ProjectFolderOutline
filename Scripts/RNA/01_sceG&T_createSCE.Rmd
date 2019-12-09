@@ -1,0 +1,189 @@
+---
+title: "01_sceG&T_createSCE"
+author: "Sebastiaan Vanuytven"
+date: "28/08/2019"
+output: html_document
+---
+
+```{r "setup", include=FALSE}
+### Ignore code, this is used to set the workig directory. 
+rm(list=ls())
+t=getwd()
+tt=gsub('.{18}$', '', t)
+require("knitr")
+opts_knit$set(root.dir = tt)
+rm(t,tt)
+```
+
+# Setting Up the work environment
+
+## Specify necessary information 
+
+```{r}
+locCountFile <- "Data/GandT/RNA/htseq_counts_all.csv"
+locMetaData <- "Data/GandT/RNA/SampleDescrCombined.txt"
+organism <- "Human" # Can be Fly/Mouse/Human
+ERCCs <- "Yes"      # Can be Yes/No
+id_type <- "ensembl"   # Can be ensembl/symbol
+```
+
+
+## Load the necessary libraries
+```{r include=FALSE}
+library(SingleCellExperiment)
+library(scater)
+library(ggplot2)
+library(tidyverse)
+```
+
+
+## Load the countfile and sampledescr
+remove the .count from the countfile, sort the rows of the metaData alphabetically and
+
+```{r}
+counts <- read.csv(locCountFile, header=TRUE, row.names=1)
+colnames(counts) = gsub(".counts" , "" , colnames(counts))
+counts <- counts[ , order(colnames(counts))]
+
+metaData <- read.table(locMetaData, header=TRUE, row.names=1)
+rownames(metaData) <- gsub("-", ".", rownames(metaData))
+metaData <- metaData[ order(row.names(metaData)), ]
+```
+
+# Create the singleCellExpermint (SCE) object 
+
+```{r}
+sce <- SingleCellExperiment(
+  assays = list(counts = as.matrix(counts)), 
+  colData = metaData)
+```
+
+## Convert Ensembl ID to genenames if necessary
+
+```{r}
+  if (organism == "Human") {
+        dataset <- "hsapiens_gene_ensembl"
+        symbol <- "hgnc_symbol"
+    } else if (organism == "Mouse") {
+        dataset <- "mmusculus_gene_ensembl"
+        symbol <- "mgi_symbol"
+    } else {
+        stop("org should be 'human' or 'mouse'")
+    }
+
+    if (id_type == "ensembl") {
+        id_type <- "ensembl_gene_id"
+    } else if (id_type == "symbol") {
+        id_type <- symbol
+    } else {
+        stop("id_type should be 'ensembl' or 'symbol'")
+    }
+
+    sce <- scater::getBMFeatureAnnos(
+        sce,
+        ids = rownames(sce),
+        filters = id_type,
+        attributes = c(
+            "ensembl_gene_id",
+            "external_gene_name",
+            symbol,
+            "chromosome_name",
+            "description",
+            "gene_biotype",
+            "percentage_gene_gc_content"
+        ),
+        dataset = dataset,
+        host = "www.ensembl.org"
+    )
+
+    SummarizedExperiment::rowData(sce)$description <- gsub(
+        "\\s\\[.*\\]", "", SummarizedExperiment::rowData(sce)$description
+    )
+
+
+```
+
+
+## Mark mitochondrial genes and ERCCs in the SCE object
+
+```{r}
+if (organism == "Human") {
+  if (ERCCs == "Yes") {
+    is.mito <- grepl("^MT-", rowData(sce)$hgnc_symbol)
+    is.spike <- grepl("^ERCC-", rownames(sce)) 
+    rowData(sce)[is.spike,"hgnc_symbol"] = rownames(sce)[is.spike]
+    rowData(sce)[is.spike,"ensembl_gene_id"] = rownames(sce)[is.spike]
+    rowData(sce)[is.spike,"external_gene_name"] = rownames(sce)[is.spike]
+    sce <- calculateQCMetrics(sce, feature_controls=list(ERCC=is.spike, Mt=is.mito))
+  } else {
+    is.mito <- grepl("^MT-", rowData(sce)$hgnc_symbol)
+    sce <- calculateQCMetrics(sce, feature_controls=list(Mt=is.mito))
+  }
+} else if (Organism == "Mouse") {
+  if (ERCCs == "Yes") {
+    is.mito <- grepl("^mt-", rowData(sce)$hgnc_symbol)
+    rowData(sce)[is.spike,"hgnc_symbol"] = rownames(sce)[is.spike]
+    rowData(sce)[is.spike,"ensembl_gene_id"] = rownames(sce)[is.spike]
+    rowData(sce)[is.spike,"external_gene_name"] = rownames(sce)[is.spike]
+    sce <- calculateQCMetrics(sce, feature_controls=list(ERCC=is.spike, Mt=is.mito))
+  } else {
+    is.mito <- grepl("^mt-", rowData(sce)$hgnc_symbol)
+    sce <- calculateQCMetrics(sce, feature_controls=list(Mt=is.mito))
+  }
+}
+```
+
+```{r}
+if (id_type == "ensembl_gene_id") {
+  rownames( sce )[rowData(sce)$is_feature_control == F  ] <- 
+    make.names( rowData( sce[rowData(sce)$is_feature_control == F ,] )$hgnc_symbol , unique = TRUE )
+  sce <- sce[!grepl("NA\\.\\.", rownames(sce)),]
+}
+```
+
+
+```{r}
+names(colData(sce))
+```
+
+```{r}
+table(colData(sce)$Sample)
+```
+
+```{r}
+table(colData(sce)$Plate)
+```
+
+
+```{r}
+table(colData(sce)$method)
+```
+
+# Save SCE object
+
+make SCEsets folder in Data folder of the project
+
+```{bash}
+mkdir -p Data/GandT/RNA/SCEsets
+```
+
+
+```{r}
+save(sce,file='Data/GandT/RNA/SCEsets/sce')
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

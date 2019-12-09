@@ -1,0 +1,338 @@
+---
+title: "03_sceG&T_DataExploration"
+author: "Sebastiaan Vanuytven"
+date: "28/08/2019"
+output: html_document
+---
+
+```{r "setup", include=FALSE}
+### Ignore code, this is used to set the workig directory. 
+rm(list=ls())
+t=getwd()
+tt=gsub('.{18}$', '', t)
+require("knitr")
+opts_knit$set(root.dir = tt)
+rm(t,tt)
+```
+
+# Setting Up the work environment
+
+
+## Specify necessary information 
+
+```{r}
+metricOfInterest <- c("Sample", "Amplification", "Nr_cells" , "Plate") # can be one or multiple elements
+ERCCs <- "Yes" # Can be Yes or No
+madHistorgamsPerMetricOfInterest <- "Yes" # Can be Yes or No
+Organism <- "Human" # can be Human or Mouse
+Colourblind_palette <- c( "#E69F00" , "#56B4E9" , "#009E73" , "#F0E442" , "#0072B2" , "#D55E00" , "#CC79A7" , "#000000", "Darkgrey" )
+```
+
+
+## Load the necessary libraries
+```{r include=FALSE}
+library(SingleCellExperiment)
+library(scater)
+library(ggplot2)
+library(tidyverse)
+library(ggpubr)
+library(scran)
+source("Scripts/GandT/RNA/Resources/plotting.R")
+
+set.seed(13)
+```
+
+## Load SCE object
+```{r}
+load("Data/GandT/RNA/SCEsets/sce")
+```
+
+## Make metedata only object for plotting
+
+```{r}
+metaData <- as.data.frame(colData(sce))
+```
+
+# Data Exploration
+
+## Make results folder
+
+```{bash}
+mkdir -p Results/GandT/RNA/QC/Overview
+mkdir -p Results/GandT/RNA/QC/scatters
+```
+
+## Fast exploration of QC metrics with beeswarm plots
+
+### Overview plot of 3 or 4 QC metrics
+
+```{r}
+plCounts <- ggplot(metaData, aes(y = metaData[,"log10_total_counts"], x= factor(1))) + 
+  geom_violin(colour = "gray60", alpha = 0.2, scale = "width", width = 0.8, fill="grey90") +
+  geom_jitter(shape=16, position=position_jitter(0.3), size = 3) +  
+  theme_pubr() + 
+  xlab("") + ylab("Log10(total counts)\n") + theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
+
+plGenes <- ggplot(metaData, aes(y = metaData[,"total_features_by_counts"], x= factor(1))) + 
+  geom_violin(colour = "gray60", alpha = 0.2, scale = "width", width = 0.8, fill="grey90") +
+  geom_jitter(shape=16, position=position_jitter(0.3), size = 3) +
+  theme_pubr() + 
+  xlab("") + ylab("Expressed genes\n") + theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
+
+plMito <- ggplot(metaData, aes(y = metaData[,"pct_counts_Mt"], x= factor(1))) + 
+  geom_violin(colour = "gray60", alpha = 0.2, scale = "width", width = 0.8, fill="grey90") +
+  geom_jitter(shape=16, position=position_jitter(0.3), size = 3) +
+  theme_pubr() + 
+  xlab("") + ylab("% MT counts\n") + theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
+
+if (ERCCs == "Yes") {
+  
+plERCC <- ggplot(metaData, aes(y = metaData[,"pct_counts_ERCC"], x= factor(1))) + 
+  geom_violin(colour = "gray60", alpha = 0.2, scale = "width", width = 0.8, fill="grey90") +
+  geom_jitter(shape=16, position=position_jitter(0.3), size = 3) +
+  theme_pubr() + 
+  xlab("") + ylab("% ERCC counts\n") + theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
+  
+  q <- ggarrange( plCounts, plGenes, plMito , plERCC , ncol = 2, nrow=2)
+  
+} else {
+  
+ q <- ggarrange( plCounts, plGenes, plMito , ncol = 2, nrow=2)
+  
+}
+
+ggsave(plot = q, "Results/GandT/RNA/QC/Overview/Generaloverview_violin.png", width = 10 , height = 8 )
+
+q
+
+
+```
+
+### Overview plot of 3 or 4 QC metrics per interest
+
+
+```{r}
+#vectorToPlot <- c(metricOfInterest, "Nr_cells")
+vectorToPlot <- metricOfInterest
+
+for (i in vectorToPlot) {
+  
+  plCounts <- ggplot(metaData, aes(x = metaData[,i] , y = log10_total_counts)) +
+    geom_violin(colour = "gray60", alpha = 0.2, scale = "width", width = 0.8, fill="grey90") + 
+    geom_jitter(shape=16, position=position_jitter(0.3), size = 3, aes(color = metaData[,i])) + 
+    scale_colour_manual(values=Colourblind_palette) +
+    xlab("") + ylab("Log10(total counts)\n") + theme_pubr() + theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1))
+
+  plGenes <- ggplot(metaData, aes(x = metaData[,i] , y = total_features_by_counts)) +
+    geom_violin(colour = "gray60", alpha = 0.2, scale = "width", width = 0.8, fill="grey90") + 
+    geom_jitter(shape=16, position=position_jitter(0.3), size = 3, aes(color = metaData[,i])) + 
+    scale_colour_manual(values=Colourblind_palette) +
+    xlab("") + ylab("Expressed genes\n") + theme_pubr() + theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1))
+
+  plMito <- ggplot(metaData, aes(x = metaData[,i] , y = pct_counts_Mt)) +
+    geom_violin(colour = "gray60", alpha = 0.2, scale = "width", width = 0.8, fill="grey90") + 
+    geom_jitter(shape=16, position=position_jitter(0.3), size = 3, aes(color = metaData[,i])) + 
+    scale_colour_manual(values=Colourblind_palette) +
+    xlab("") + ylab("% mitochondrial counts\n") + theme_pubr() + theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1))
+
+  if (ERCCs == "Yes") {
+  
+    plERCC <- ggplot(metaData, aes(x = metaData[,i] , y = pct_counts_ERCC)) +
+      geom_violin(colour = "gray60", alpha = 0.2, scale = "width", width = 0.8, fill="grey90") + 
+      geom_jitter(shape=16, position=position_jitter(0.3), size = 3, aes(color = metaData[,i])) + 
+      scale_colour_manual(values=Colourblind_palette) +
+      xlab("") + ylab("% ERCC counts\n") + theme_pubr() + theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1))
+  
+    q <- ggarrange( plCounts, plGenes, plMito , plERCC , ncol = 2, nrow=2)
+  
+  } else {
+  
+  q <- ggarrange( plCounts, plGenes, plMito , ncol = 2, nrow=2)
+  
+  }
+
+  ggsave(plot = q, paste0("Results/GandT/RNA/QC/Overview/Generaloverview_violin_", i , ".png"), width = 10 , height = 8 )
+
+  q
+  
+}
+
+
+
+```
+
+
+## Fast Exploration with MAD histograms
+
+### Overview plot of 3 or 4 QC metrics
+
+Distributions by cell. Blue line shows the median and red lines show median absolute deviations (MADs) from the median
+
+```{r}
+if (ERCCs == "Yes") {
+  q <- ggarrange(
+    outlier_histogram(metaData, "log10_total_counts", mads = 1:6) + ylab("") + xlab("Log10(total counts)") ,
+    outlier_histogram(metaData, "log10_total_features_by_counts", mads = 1:6) + ylab("") + xlab("Log10(Expressed genes)"),
+    outlier_histogram(metaData, "pct_counts_Mt", mads = c(1, 3, 5, 7)) + ylab("") + xlab("% mitochondrial counts"),
+    outlier_histogram(metaData, "pct_counts_ERCC", mads = 1:6) + ylab("") + xlab("% ERCC counts"),
+    ncol = 2, nrow=2
+  )
+} else {
+  q <- ggarrange(
+    outlier_histogram(metaData, "log10_total_counts", mads = 1:6) + ylab("") + xlab("Log10(total counts)") ,
+    outlier_histogram(metaData, "log10_total_features_by_counts", mads = 1:6) + ylab("") + xlab("Log10(Expressed genes)"),
+    outlier_histogram(metaData, "pct_counts_Mt", mads = c(1, 3, 5, 7)) + ylab("") + xlab("% mitochondrial counts"),
+    ncol = 2, nrow=2
+  )
+}
+ggsave(plot = q, "Results/GandT/RNA/QC/Overview/Generaloverview_mads.png", width = 10 , height = 8 )
+q
+```
+
+
+## scatter plots for 4 quality metrics coloured by interest
+
+Results/Pilot/RNA/QC/scatters
+
+```{r}
+#vectorToPlot <- c(metricOfInterest, "Nr_cells")
+
+for (i in vectorToPlot) {
+  
+  pl <- ggplot(metaData, aes(x = log10_total_counts, y = total_features_by_counts)) +
+    geom_point(aes(colour = metaData[,i]), size=5) +
+    xlab("\n Log10(total counts)") + ylab("Expressed Genes\n") + theme_pubr() +
+    labs(color=i) + scale_colour_manual(values=Colourblind_palette)
+  ggsave(plot = pl, paste0("Results/GandT/RNA/QC/scatters/Scatter_countsGenes_", i , ".png"), width = 8 , height = 5 )
+  
+  pl <- ggplot(metaData, aes(x = log10_total_counts, y = pct_counts_Mt)) +
+    geom_point(aes(colour = metaData[,i]), size=5) +
+    xlab("\n Log10(total counts)") + ylab("\n% mitochondrial counts") + theme_pubr() +
+    labs(color=i) + scale_colour_manual(values=Colourblind_palette)
+  ggsave(plot = pl, paste0("Results/GandT/RNA/QC/scatters/Scatter_countsMt_", i , ".png"), width = 8 , height = 5 )
+  
+  if (ERCCs == "Yes") {
+    
+  pl <- ggplot(metaData, aes(x = pct_counts_Mt, y = pct_counts_ERCC)) +
+    geom_point(aes(colour = metaData[,i]), size=5) +
+    xlab("\n% mitochondrial counts") + ylab("% ERCC counts\n") + theme_pubr() +
+    labs(color=i) + scale_colour_manual(values=Colourblind_palette)
+  ggsave(plot = pl, paste0("Results/GandT/RNA/QC/scatters/Scatter_MtERCCs_", i , ".png"), width = 8 , height = 5 )
+  
+  pl <- ggplot(metaData, aes(x = log10_total_counts, y = pct_counts_ERCC)) +
+    geom_point(aes(colour = metaData[,i]), size=5) +
+    xlab("\n Log10(total counts)") + ylab("% ERCC counts\n") + theme_pubr() +
+    labs(color=i) + scale_colour_manual(values=Colourblind_palette)
+  ggsave(plot = pl, paste0("Results/GandT/RNA/QC/scatters/Scatter_countsERCCs_", i , ".png"), width = 8 , height = 5 )
+  
+  }
+} 
+```
+
+
+# Cell Cycle analysis
+
+## Add ensemble ID to rowdat
+
+```{r}
+if (Organism == "Human") {
+  library(org.Hs.eg.db)
+  hm.pairs <- readRDS(system.file("exdata", "human_cycle_markers.rds", package="scran"))
+  symb <- mapIds(org.Hs.eg.db, keys=rownames(sce), keytype="SYMBOL", column="ENSEMBL")
+  rowData(sce)$SYMBOL <- rownames(sce)
+  rowData(sce)$ENSEMBL <- symb
+  assignments <- cyclone(sce, hm.pairs, gene.names=rowData(sce)$ENSEMBL)
+  sce$CellCycle <- assignments$phases
+ } else if (Organism == "Mouse") {
+  library(org.Mm.eg.db)
+  mm.pairs <- readRDS(system.file("exdata", "mouse_cycle_markers.rds", package="scran"))
+  symb <- mapIds(org.Mm.eg.db, keys=rownames(sce), keytype="SYMBOL", column="ENSEMBL")
+  rowData(sce)$SYMBOL <- rownames(sce)
+  rowData(sce)$ENSEMBL <- symb
+  assignments <- cyclone(sce, hm.pairs, gene.names=rowData(sce)$ENSEMBL)
+  sce$CellCycle <- assignments$phases
+}
+
+```
+
+## Table of cell cycle assignments 
+
+```{r}
+kable(table(Phase = colData(sce)$CellCycle, useNA = "ifany"))
+```
+
+# Identify High Expression genes
+
+```{r}
+plotHighestExprs(sce)
+ggsave("Results/GandT/RNA/QC/HighlyExpressedGenes.png", width = 8 , height = 5 )
+```
+
+# Quick look at the potential confounding factors
+
+run normailzation and dimensionality reduction on the complete dataset 
+
+```{r}
+sizeFactors(sce) <- librarySizeFactors(sce)
+sce <- normalize(sce)
+sce <- runPCA(sce)
+sce <- runTSNE(sce)
+```
+
+## Explanatory variables
+
+This plot shows the percentage of variance in the dataset that is explained by various technical factors.
+
+```{r}
+#exp_vars <- c("CellCycle", "log10_total_counts",
+#              "pct_counts_ERCC", "total_features_by_counts",
+#              "pct_counts_Mt","Nr_cells", metricOfInterest)
+
+exp_vars <- c("CellCycle", "log10_total_counts",
+              "pct_counts_ERCC", "total_features_by_counts",
+              "pct_counts_Mt", metricOfInterest)
+all_zero <- Matrix::rowSums(counts(sce)) == 0
+plotExplanatoryVariables(sce[!all_zero, ], variables = exp_vars)
+ggsave("Results/GandT/RNA/QC/Density_confounders.png", width = 10 , height = 8 )
+
+```
+
+## Dimensionality reduction
+
+Dimensionality reduction plots coloured by technical factors can help identify which may be playing a bit role in the dataset.
+
+```{r}
+dimred_factors <- c(
+    "Total counts"        = "log10_total_counts",
+    "Cell Cycle"           = "CellCycle", 
+    "Total features"      = "total_features_by_counts",
+    "Mitochondrial genes" = "pct_counts_Mt",
+    "ERCCs"                = "pct_counts_ERCC",
+    "Number of Cells"     = "Nr_cells"
+)
+```
+
+```{r warning=FALSE}
+plot_list <- lapply(names(dimred_factors), function(fct_name) {
+    plotPCA(sce, colour_by = dimred_factors[fct_name] ) +
+        ggtitle(fct_name) +
+        theme(legend.position = "bottom")
+})
+cowplot::plot_grid(plotlist = plot_list, ncol = 3)
+ggsave("Results/GandT/RNA/QC/PCA_confounders.png", width = 10 , height = 8 )
+```
+
+```{r warning=FALSE}
+plot_list <- lapply(names(dimred_factors), function(fct_name) {
+    plotTSNE(sce, colour_by = dimred_factors[fct_name]) +
+        ggtitle(fct_name) +
+        theme(legend.position = "bottom")
+})
+cowplot::plot_grid(plotlist = plot_list, ncol = 3)
+ggsave("Results/GandT/RNA/QC/tSNE_confounders.png", width = 10 , height = 8 )
+```
+
+```{r}
+save(sce,file='Data/GandT/RNA/SCEsets/sce')
+```
+

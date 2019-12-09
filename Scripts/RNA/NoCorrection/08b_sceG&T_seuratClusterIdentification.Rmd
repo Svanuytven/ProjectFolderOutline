@@ -1,0 +1,81 @@
+---
+title: "08b_sceG&T_seuratClusterIdentification"
+author: "Sebastiaan Vanuytven"
+date: "28/08/2019"
+output: html_document
+---
+
+```{r "setup", include=FALSE}
+### Ignore code, this is used to set the workig directory. 
+rm(list=ls())
+t=getwd()
+tt=gsub('.{30}$', '', t)
+require("knitr")
+opts_knit$set(root.dir = tt)
+rm(t,tt)
+```
+
+## Load necessary libraries for the analysis
+
+```{r}
+library(Seurat)
+library(dplyr)
+```
+
+## Parameters to specify
+
+```{r}
+use.pcs = 1:7
+Colourblind_palette <- c( "#E69F00" , "#56B4E9" , "#009E73" , "#F0E442" , "#0072B2" , "#D55E00" , "#CC79A7" , "#000000" )
+```
+
+## load Seurat object
+
+```{r}
+load(file="Data/GandT/RNA/SCEsets/Seurat.RData")
+```
+
+## Cluster Identification
+
+Seurat implements an graph-based clustering approach. Distances between the cells are calculated based on previously identified PCs. Seurat approach was heavily inspired by recent manuscripts which applied graph-based clustering approaches to scRNAseq data. Briefly, Seurat identify clusters of cells by a shared nearest neighbor (SNN) modularity optimization based clustering algorithm. First calculate k-nearest neighbors (KNN) and construct the SNN graph. Then optimize the modularity function to determine clusters.
+
+The FindClusters function implements the procedure, and contains a resolution parameter that sets the granularity of the downstream clustering, with increased values leading to a greater number of clusters. I tend to like to perform a series of resolutions, investigate and choose.
+
+```{r}
+bc.integrated <- FindNeighbors(bc.integrated, dims = use.pcs, reduction = "pca")
+bc.integrated <- FindClusters(bc.integrated, resolution = seq(0.1,1,0.1), random.seed = 13)
+```
+
+Lets first investigate how many clusters each resolution produces 
+
+```{r}
+sapply(grep("^RNA_snn_res",colnames(bc.integrated@meta.data),value = TRUE),
+       function(x) length(unique(bc.integrated@meta.data[,x])))
+```
+
+## Select resolution that best fits your expectations
+
+for the paper of bernard Thienpont they selected 0.5 as their resolution, so here we will go for 0.6
+
+```{r}
+Idents(object = bc.integrated) <- "RNA_snn_res.0.6"
+```
+
+## Create table displaying the number of each sample belonging to each table
+
+```{r}
+table(bc.integrated@active.ident,bc.integrated@meta.data$Sample)
+```
+
+## Save Seurat Object
+
+```{r}
+save(bc.integrated,file="Data/GandT/RNA/SCEsets/Seurat.RData")
+```
+
+## Sesion information
+
+```{r}
+sessionInfo()
+```
+

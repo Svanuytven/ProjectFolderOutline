@@ -1,0 +1,211 @@
+---
+title: "12b_sceG&T_seuratStatistics"
+author: "Sebastiaan Vanuytven
+date: "28/08/2019"
+output: html_document
+---
+
+```{r "setup", include=FALSE}
+### Ignore code, this is used to set the workig directory. 
+rm(list=ls())
+t=getwd()
+tt=gsub('.{30}$', '', t)
+require("knitr")
+opts_knit$set(root.dir = tt)
+rm(t,tt)
+```
+
+## Load necessary libraries for the analysis
+
+```{r}
+library(Seurat)
+library(dplyr)
+library(viridis)
+```
+
+## Parameters to specify
+
+```{r}
+use.pcs = 1:7
+Colourblind_palette <- c( "#E69F00" , "#56B4E9" , "#009E73" , "#F0E442" , "#0072B2" , "#D55E00" , "#CC79A7" , "#000000" )
+```
+
+## load Seurat object
+
+```{r}
+load(file="Data/RNA/MEL006/SCEsets/Seurat_methodTimepoint.RData")
+```
+
+```{r}
+sce <- as.SingleCellExperiment(bc.integrated)
+```
+
+## Statistical test for Treatment 
+```{r}
+tt <- data.frame(colData(sce))
+#unique(tt$ref)
+
+cntr <- tt[tt$timepoint == 'T0',]
+netrin <-  tt[tt$timepoint == 'T28',]
+
+totalCntr <- nrow(tt[tt$timepoint == 'T0',])
+totalNetrin <- nrow(tt[tt$timepoint == 'T28',])
+
+raw.Pvalues <- c()
+
+for (i in 0:max(as.numeric(levels(tt$ident)))) {
+  n1 <- paste0("Cluster ",i)
+  n2 <- paste0("Not cluster ",i)
+  cntrInCluster <- nrow(cntr[cntr$ident==i,])
+  netrinInCluster <- nrow(netrin[netrin$ident==i,])
+  contTable <- matrix(c(cntrInCluster, totalCntr-cntrInCluster , netrinInCluster, totalNetrin - netrinInCluster),
+        nrow = 2 ,
+        dimnames = list( Cluster = c(n1, n2),
+                        Type = c("Control" , "Netrin")))
+
+  raw.Pvalues[i+1] <- chisq.test(contTable)$p.value
+}
+pValues <- data.frame(raw.Pvalues)
+rownames(pValues) <- 0:max(as.numeric(levels(tt$ident)))
+pValues$bonferroni <- p.adjust(raw.Pvalues, method = "bonferroni")
+pValues$BH <- p.adjust(raw.Pvalues, method = "BH")
+pValues$fdr <- p.adjust(raw.Pvalues, method = "fdr")
+pValues
+```
+
+```{r}
+table(tt$ident, tt$timepoint)
+```
+
+```{r}
+unique(tt$ref)
+```
+
+
+## Statistical test for individual samples
+```{r}
+cntr <- tt[tt$ref  == '400k_C2CN4_C7CN35',]
+netrin <-  tt[tt$ref  == '400k_C2CN3_C7CN46',]
+cntr2 <- tt[tt$ref  == '400k_C2CN4_C7CN46',]
+
+totalCntr <- nrow(tt[tt$ref  == '400k_C2CN4_C7CN35',])
+totalNetrin <- nrow(tt[tt$ref  == '400k_C2CN3_C7CN46',])
+totalCntr2 <- nrow(tt[tt$ref  == '400k_C2CN4_C7CN46',])
+
+
+raw.Pvalues <- c()
+
+for (i in 0:max(as.numeric(levels(tt$ident)))) {
+  n1 <- paste0("Cluster ",i)
+  n2 <- paste0("Not cluster ",i)
+  
+  cntrInCluster <- nrow(cntr[cntr$ident==i,])
+  netrinInCluster <- nrow(netrin[netrin$ident==i,])
+  cntrInCluster2 <- nrow(cntr2[cntr2$ident==i,])
+  
+  contTable <- matrix(c(cntrInCluster, totalCntr-cntrInCluster , netrinInCluster, totalNetrin - netrinInCluster,
+                        cntrInCluster2, totalCntr2-cntrInCluster2),
+        nrow = 2 ,
+        dimnames = list( Cluster = c(n1, n2),
+                        Type = c("Control" , "Netrin", "Control2")))
+
+  raw.Pvalues[i+1] <- chisq.test(contTable)$p.value
+}
+pValues <- data.frame(raw.Pvalues)
+rownames(pValues) <- 0:max(as.numeric(levels(tt$ident)))
+pValues$bonferroni <- p.adjust(raw.Pvalues, method = "bonferroni")
+pValues$BH <- p.adjust(raw.Pvalues, method = "BH")
+pValues$fdr <- p.adjust(raw.Pvalues, method = "fdr")
+pValues
+```
+
+```{r}
+table(tt$ident, tt$ref)
+```
+
+## Statistical test for batch2 
+```{r}
+cntr <- tt[tt$timepoint == 'T0',]
+netrin <-  tt[tt$timepoint == 'T28',]
+
+totalCntr <- nrow(tt[tt$timepoint == 'T0',])
+totalNetrin <- nrow(tt[tt$timepoint == 'T28',])
+
+raw.Pvalues <- c()
+
+for (i in 1:3) {
+  n1 <- paste0("Cluster ",i)
+  n2 <- paste0("Not cluster ",i)
+  cntrInCluster <- nrow(cntr[cntr$ref==unique(tt$ref)[i],])
+  netrinInCluster <- nrow(netrin[netrin$ref==unique(tt$ref)[i],])
+  contTable <- matrix(c(cntrInCluster, totalCntr-cntrInCluster , netrinInCluster, totalNetrin - netrinInCluster),
+        nrow = 2 ,
+        dimnames = list( Cluster = c(n1, n2),
+                        Type = c("Control" , "Netrin")))
+
+  raw.Pvalues[i] <- chisq.test(contTable)$p.value
+}
+pValues <- data.frame(raw.Pvalues)
+rownames(pValues) <- unique(tt$ref)[1:3]
+pValues$bonferroni <- p.adjust(raw.Pvalues, method = "bonferroni")
+pValues$BH <- p.adjust(raw.Pvalues, method = "BH")
+pValues$fdr <- p.adjust(raw.Pvalues, method = "fdr")
+pValues
+```
+
+```{r}
+table(tt$ref, tt$timepoint)
+```
+
+
+
+## Statistical test for batch2 
+```{r}
+zero <- tt[tt$ident == 0,]
+one <-  tt[tt$ident == 1,]
+two <- tt[tt$ident == 2,]
+three <-  tt[tt$ident == 3,]
+four <-  tt[tt$ident == 4,]
+
+totalZero <- nrow(tt[tt$ident == 0,])
+totalOne <- nrow(tt[tt$ident == 1,])
+totalTwo <- nrow(tt[tt$ident == 2,])
+totalThree <- nrow(tt[tt$ident == 3,])
+totalFour <- nrow(tt[tt$ident == 4,])
+
+
+raw.Pvalues <- c()
+
+for (i in 1:3) {
+  n1 <- paste0("Cluster ",i)
+  n2 <- paste0("Not cluster ",i)
+  
+  cntrInCluster <- nrow(zero[zero$ref==unique(tt$ref)[i],])
+  netrinInCluster <- nrow(one[one$ref==unique(tt$ref)[i],])
+  cntrInCluster2 <- nrow(two[two$ref==unique(tt$ref)[i],])
+  netrinInCluster2 <- nrow(three[three$ref==unique(tt$ref)[i],])
+  cntrInCluster3 <- nrow(four[four$ref==unique(tt$ref)[i],])
+  
+  
+  contTable <- matrix(c(cntrInCluster, totalZero-cntrInCluster , netrinInCluster, totalOne - netrinInCluster,
+                        cntrInCluster2, totalTwo - cntrInCluster2, netrinInCluster2, totalThree-netrinInCluster2, 
+                        cntrInCluster3, totalFour - cntrInCluster3 ),
+        nrow = 2 ,
+        dimnames = list( Cluster = c(n1, n2),
+                        Type = c("Zero", "One" , "Two", "Three","Four")))
+
+  raw.Pvalues[i] <- chisq.test(contTable)$p.value
+}
+pValues <- data.frame(raw.Pvalues)
+rownames(pValues) <- unique(tt$ref)[1:3]
+pValues$bonferroni <- p.adjust(raw.Pvalues, method = "bonferroni")
+pValues$BH <- p.adjust(raw.Pvalues, method = "BH")
+pValues$fdr <- p.adjust(raw.Pvalues, method = "fdr")
+pValues
+```
+
+```{r}
+table(tt$ref, tt$ident)
+```
+
+

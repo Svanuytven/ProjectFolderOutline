@@ -1,0 +1,12 @@
+# LaTex
+*.aux
+*.bbl
+*.out
+*.toc
+*.blg
+*.log
+*.lof
+
+# R
+.RData
+.Rhistory

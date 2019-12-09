@@ -1,0 +1,298 @@
+---
+title: "11b_sceG&T_seuratMarkerIdentification"
+author: "Sebastiaan Vanuytven"
+date: "28/08/2019"
+output: html_document
+---
+
+```{r "setup", include=FALSE}
+### Ignore code, this is used to set the workig directory. 
+rm(list=ls())
+t=getwd()
+tt=gsub('.{30}$', '', t)
+require("knitr")
+opts_knit$set(root.dir = tt)
+rm(t,tt)
+```
+
+## Load necessary libraries for the analysis
+
+```{r}
+library(Seurat)
+library(dplyr)
+library(viridis)
+```
+
+## Parameters to specify
+
+```{r}
+use.pcs = 1:7
+Colourblind_palette <- c( "#E69F00" , "#56B4E9" , "#009E73" , "#F0E442" , "#0072B2" , "#D55E00" , "#CC79A7" , "#000000" )
+```
+
+## load Seurat object
+
+```{r}
+load(file="Data/RNA/MEL006/SCEsets/Seurat_methodTimepoint.RData")
+```
+
+## Identification of Marker Genes
+
+```{bash}
+cd Results/MEL006/RNA
+mkdir -p Seurat/Method_timepoint/Markers
+```
+
+
+```{r}
+DefaultAssay(bc.integrated) <- "RNA"
+bc.markers <- FindAllMarkers(object = bc.integrated, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+save(bc.markers,file="Results/MEL006/RNA/Seurat/Method_timepoint/Markers/markers.RData")
+load("Results/MEL006/RNA/Seurat/Method_timepoint/Markers/markers.RData")
+Top20Markers <- bc.markers %>% group_by(cluster) %>% dplyr::filter(p_val_adj <= 0.05) %>% top_n(20, avg_logFC)
+allSignificantMarkers <- bc.markers %>% group_by(cluster) %>% dplyr::filter(p_val_adj <= 0.05)
+write.table(Top20Markers, "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/top20markers.txt", sep="\t")
+write.table(allSignificantMarkers, "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/allSignificantMarkers.txt", sep="\t")
+
+bc.markersNeg <- FindAllMarkers(object = bc.integrated, only.pos = F, min.pct = 0, logfc.threshold = 0.25)
+allSignificantMarkersNeg <- bc.markersNeg %>% group_by(cluster) %>% dplyr::filter(p_val_adj <= 0.05)
+write.table(allSignificantMarkersNeg, "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/allSignificantMarkers_NegPos.txt", sep="\t")
+```
+
+```{r}
+bc.integrated <- ScaleData(bc.integrated, verbose = FALSE)
+top10 <- bc.markers %>% group_by(cluster) %>% top_n(10, avg_logFC)
+#top5 <- bc.markers %>% group_by(cluster) %>% top_n(5, avg_logFC)
+# setting slim.col.label to TRUE will print just the cluster IDS instead of
+# every cell name
+DoHeatmap(object = bc.integrated, features = top10$gene) + NoLegend()
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/Heatmap_top10Markers.png" , width = 15 , height = 10 )
+
+DotPlot(bc.integrated, features = top10$gene, cols = c("blue", "red"), dot.scale = 8) + RotatedAxis()
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/Dotplot_top10Markers.png" , width = 15 , height = 10 )
+```
+
+## Cancer-specific
+
+```{r}
+VlnPlot(object = bc.integrated, features = c("TRPM1" , "GPR143" ,  "MLPH" , "MLANA" , "MITF") , cols= viridis(length(unique(bc.integrated@active.ident))))
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/PigmentedMarkers.png" , width = 20 , height = 10 )
+
+VlnPlot(object = bc.integrated, features = c("SLIT2" , "BGN" ,  "TNC" , "AXL" , "MITF", "SOX10") , cols= viridis(length(unique(bc.integrated@active.ident))))
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/InvasiveMarkers.png" , width = 20 , height = 10 )
+
+VlnPlot(object = bc.integrated, features = c("NGFR" , "AQP1" ,  "GFRA2" , "MITF", "SOX10") , cols= viridis(length(unique(bc.integrated@active.ident))))
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/NCSCMarkers.png" , width = 20 , height = 10 )
+
+VlnPlot(object = bc.integrated, features = c("CD36" , "SLC7A8" ,  "SLC12A7" , "DLX5" , "MITF") , cols= viridis(length(unique(bc.integrated@active.ident))))
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/StarvedMarkers.png" , width = 20 , height = 10 )
+```
+
+```{r}
+FeaturePlot(bc.integrated, features = c("TRPM1" , "GPR143" ,  "MLPH" , "MLANA" , "MITF") , combine = T, cols = c("lightgrey", "red"), reduction = "tsne", label = T)
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/TSNE_PigmentedMarkers.png" , width = 20 , height = 15 ) 
+
+FeaturePlot(bc.integrated, features = c("SLIT2" , "BGN" ,  "TNC" , "AXL" , "MITF", "SOX10")  , combine = T, cols = c("lightgrey", "red"), reduction = "tsne" , label = T)
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/TSNE_InvassiveMarkers.png" , width = 20 , height = 15 ) 
+
+FeaturePlot(bc.integrated, features = c("NGFR" , "AQP1" ,  "GFRA2" , "MITF", "SOX10")  , combine = T, cols = c("lightgrey", "red"), reduction = "tsne", label = T)
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/TSNE_NCSCMarkers.png" , width = 20 , height = 15 ) 
+
+FeaturePlot(bc.integrated, features = c("CD36" , "SLC7A8" ,  "SLC12A7" , "DLX5" , "MITF") , combine = T, cols = c("lightgrey", "red"), reduction = "tsne", label = T)
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/TSNE_StarvedMarkers.png" , width = 20 , height = 15 ) 
+
+
+
+```
+
+```{r}
+FeaturePlot(bc.integrated, features = c("TRPM1" , "GPR143" ,  "MLPH" , "MLANA" , "MITF") , combine = T, cols = c("lightgrey", "red"), reduction = "tsne")
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/TSNE_PigmentedMarkers.png" , width = 20 , height = 15 ) 
+
+FeaturePlot(bc.integrated, features = c("SLIT2" , "BGN" ,  "TNC" , "AXL" , "MITF", "SOX10")  , combine = T, cols = c("lightgrey", "red"), reduction = "tsne")
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/TSNE_InvassiveMarkers.png" , width = 20 , height = 15 ) 
+
+FeaturePlot(bc.integrated, features = c("NGFR" , "AQP1" ,  "GFRA2" , "MITF", "SOX10")  , combine = T, cols = c("lightgrey", "red"), reduction = "tsne")
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/TSNE_NCSCMarkers.png" , width = 20 , height = 15 ) 
+
+FeaturePlot(bc.integrated, features = c("CD36" , "SLC7A8" ,  "SLC12A7" , "DLX5" , "MITF") , combine = T, cols = c("lightgrey", "red"), reduction = "tsne")
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/TSNE_StarvedMarkers.png" , width = 20 , height = 15 ) 
+```
+
+
+```{r}
+
+library(tidyverse)
+library(reshape2)
+fractionTable <- as.data.frame.matrix( table(bc.integrated@active.ident,bc.integrated@meta.data$method_timepoint) )
+#fractionTable_ <- transform(fractionTable, Sum=rowSums(fractionTable))
+SumFr <- rowSums(fractionTable)
+
+frac <- fractionTable/SumFr
+frac$Cluster <- rownames(frac)
+frac <- melt(frac) 
+frac%>% 
+  ggplot(aes(x=fct_reorder(Cluster , plyr::desc(as.numeric(Cluster))), y = value , fill = variable )) +
+  geom_bar(stat = "identity", position = position_stack(reverse = TRUE)) +
+  coord_flip() +
+  labs(y = "Fraction of Cells") +
+  theme(axis.title.y =element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.line.y = element_blank() , 
+        axis.line.x = element_blank()) +
+  scale_fill_manual(values = Colourblind_palette)
+
+SumFr
+ggplot() + geom_bar(aes(x=0:(length(SumFr)-1),y=SumFr), stat='identity' , position = position_stack(reverse = F)) +   
+  coord_flip() +
+  labs(y = "Number of Cells") +
+    theme(axis.title.y =element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.line.y = element_blank() , 
+        axis.line.x = element_blank()) +
+  scale_x_continuous(trans = "reverse" , breaks = 0:18)
+
+
+fractionTable <- as.data.frame.matrix( table(bc.integrated@active.ident,bc.integrated@meta.data$ref) )
+#fractionTable_ <- transform(fractionTable, Sum=rowSums(fractionTable))
+SumFr <- rowSums(fractionTable)
+
+frac <- fractionTable/SumFr
+frac$Cluster <- rownames(frac)
+frac <- melt(frac) 
+frac%>% 
+  ggplot(aes(x=fct_reorder(Cluster , plyr::desc(as.numeric(Cluster))), y = value , fill = variable )) +
+  geom_bar(stat = "identity", position = position_stack(reverse = TRUE)) +
+  coord_flip() +
+  labs(y = "Fraction of Cells") +
+  theme(axis.title.y =element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.line.y = element_blank() , 
+        axis.line.x = element_blank()) +
+  scale_fill_manual(values = Colourblind_palette)
+
+
+fractionTable <- as.data.frame.matrix( table(bc.integrated@active.ident,bc.integrated@meta.data$timepoint) )
+#fractionTable_ <- transform(fractionTable, Sum=rowSums(fractionTable))
+SumFr <- rowSums(fractionTable)
+
+frac <- fractionTable/SumFr
+frac$Cluster <- rownames(frac)
+frac <- melt(frac) 
+frac%>% 
+  ggplot(aes(x=fct_reorder(Cluster , plyr::desc(as.numeric(Cluster))), y = value , fill = variable )) +
+  geom_bar(stat = "identity", position = position_stack(reverse = TRUE)) +
+  coord_flip() +
+  labs(y = "Fraction of Cells") +
+  theme(axis.title.y =element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.line.y = element_blank() , 
+        axis.line.x = element_blank()) +
+  scale_fill_manual(values = Colourblind_palette)
+```
+
+
+
+```{r}
+Idents(object = bc.integrated) <- "ref"
+bc.markers <- FindAllMarkers(object = bc.integrated, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+save(bc.markers,file="Results/MEL006/RNA/Seurat/Method_timepoint/Markers/markers_ref.RData")
+load("Results/MEL006/RNA/Seurat/Method_timepoint/Markers/markers_ref.RData")
+Top20Markers <- bc.markers %>% group_by(cluster) %>% dplyr::filter(p_val_adj <= 0.05) %>% top_n(20, avg_logFC)
+allSignificantMarkers <- bc.markers %>% group_by(cluster) %>% dplyr::filter(p_val_adj <= 0.05)
+write.table(Top20Markers, "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/top20markers_ref.txt", sep="\t")
+write.table(allSignificantMarkers, "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/allSignificantMarkers_ref.txt", sep="\t")
+
+bc.markersNeg <- FindAllMarkers(object = bc.integrated, only.pos = F, min.pct = 0, logfc.threshold = 0.25)
+allSignificantMarkersNeg <- bc.markersNeg %>% group_by(cluster) %>% dplyr::filter(p_val_adj <= 0.05)
+write.table(allSignificantMarkersNeg, "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/allSignificantMarkers_ref_NegPos.txt", sep="\t")
+```
+
+```{r}
+DoHeatmap(object = bc.integrated[,!is.na(bc.integrated@meta.data$ref)], features = allSignificantMarkers$gene) + NoLegend()
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/HeatmapRef_top10Markers.png" , width = 16 , height = 12 )
+
+DotPlot(bc.integrated[,!is.na(bc.integrated@meta.data$ref)], features = allSignificantMarkers$gene, cols = c("blue", "red"), dot.scale = 8) + RotatedAxis()
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/Markers/DotplotRef_top10Markers.png" , width = 15 , height = 10 )
+```
+
+```{r}
+library(tidyverse)
+library(reshape2)
+fractionTable <- as.data.frame.matrix( table(bc.integrated@active.ident,bc.integrated@meta.data$method_timepoint) )
+#fractionTable_ <- transform(fractionTable, Sum=rowSums(fractionTable))
+SumFr <- rowSums(fractionTable)
+
+frac <- fractionTable/SumFr
+frac$Cluster <- rownames(frac)
+frac <- melt(frac) 
+frac%>% 
+  ggplot(aes(x=fct_reorder(Cluster , plyr::desc(as.numeric(Cluster))), y = value , fill = variable )) +
+  geom_bar(stat = "identity", position = position_stack(reverse = TRUE)) +
+  coord_flip() +
+  labs(y = "Fraction of Cells") +
+  theme(axis.title.y =element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.line.y = element_blank() , 
+        axis.line.x = element_blank()) +
+  scale_fill_manual(values = Colourblind_palette)
+
+SumFr
+ggplot() + geom_bar(aes(x=0:(length(SumFr)-1),y=SumFr), stat='identity' , position = position_stack(reverse = F)) +   
+  coord_flip() +
+  labs(y = "Number of Cells") +
+    theme(axis.title.y =element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.line.y = element_blank() , 
+        axis.line.x = element_blank()) +
+  scale_x_continuous(trans = "reverse" , breaks = 0:18)
+
+
+fractionTable <- as.data.frame.matrix( table(bc.integrated@active.ident,bc.integrated@meta.data$integrated_snn_res.0.6))
+#fractionTable_ <- transform(fractionTable, Sum=rowSums(fractionTable))
+SumFr <- rowSums(fractionTable)
+
+frac <- fractionTable/SumFr
+frac$Cluster <- rownames(frac)
+frac <- melt(frac) 
+frac%>% 
+  ggplot(aes(x=fct_reorder(Cluster , plyr::desc(as.numeric(Cluster))), y = value , fill = variable )) +
+  geom_bar(stat = "identity", position = position_stack(reverse = TRUE)) +
+  coord_flip() +
+  labs(y = "Fraction of Cells") +
+  theme(axis.title.y =element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.line.y = element_blank() , 
+        axis.line.x = element_blank()) +
+  scale_fill_manual(values = Colourblind_palette)
+
+
+fractionTable <- as.data.frame.matrix( table(bc.integrated@active.ident,bc.integrated@meta.data$timepoint) )
+#fractionTable_ <- transform(fractionTable, Sum=rowSums(fractionTable))
+SumFr <- rowSums(fractionTable)
+
+frac <- fractionTable/SumFr
+frac$Cluster <- rownames(frac)
+frac <- melt(frac) 
+frac%>% 
+  ggplot(aes(x=fct_reorder(Cluster , plyr::desc(as.numeric(Cluster))), y = value , fill = variable )) +
+  geom_bar(stat = "identity", position = position_stack(reverse = TRUE)) +
+  coord_flip() +
+  labs(y = "Fraction of Cells") +
+  theme(axis.title.y =element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.line.y = element_blank() , 
+        axis.line.x = element_blank()) +
+  scale_fill_manual(values = Colourblind_palette)
+```
+
+```{r}
+TSNEPlot(object = bc.integrated[,!is.na(bc.integrated@meta.data$ref)], pt.size=3 , cols = Colourblind_palette , group.by = "ref")
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/tSNE/tSNE_subclones.png" , width = 10 , height = 5 )
+```
+
+```{r}
+DimPlot(object = bc.integrated[,!is.na(bc.integrated@meta.data$ref)], pt.size=3 , cols = Colourblind_palette , group.by="ref" , reduction = "umap" )
+ggsave( "Results/MEL006/RNA/Seurat/Method_timepoint/UMAP/UMAP_subclones.png" , width = 10 , height = 5 )
+```
+

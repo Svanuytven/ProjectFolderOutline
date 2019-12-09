@@ -1,0 +1,78 @@
+---
+title: "07b_sceG&T_seuratSelectNrPCs"
+author: "Sebastiaan Vanuytven"
+date: "28/08/2019"
+output: html_document
+---
+
+```{r "setup", include=FALSE}
+### Ignore code, this is used to set the workig directory. 
+rm(list=ls())
+t=getwd()
+tt=gsub('.{30}$', '', t)
+require("knitr")
+opts_knit$set(root.dir = tt)
+rm(t,tt)
+```
+
+## Load necessary libraries for the analysis
+
+```{r}
+library(Seurat)
+library(dplyr)
+```
+
+## Parameters to specify
+
+```{r}
+Colourblind_palette <- c( "#E69F00" , "#56B4E9" , "#009E73" , "#F0E442" , "#0072B2" , "#D55E00" , "#CC79A7" , "#000000" )
+```
+
+## load Seurat object
+
+```{r}
+load(file="Data/GandT/RNA/SCEsets/Seurat.RData")
+```
+
+## Selecting which PC are relevant for downstream analysis
+
+To overcome the extensive technical noise in any single gene, Seurat clusters cells based on their PCA scores, with each PC essentially representing a metagene that combines information across a correlated gene set. Determining how many PCs to include downstream is therefore an important step.
+
+### Elbow plot
+
+PCElbowPlot plots the standard deviations (or approximate singular values if running PCAFast) of the principle components for easy identification of an elbow in the graph. This elbow often corresponds well with the significant PCs and is much faster to run
+
+```{r}
+ElbowPlot(
+  bc.integrated)
+```
+
+### Jackstraw procedure
+
+The JackStraw function randomly permutes a subset of data, and calculates projected PCA scores for these ‘random’ genes. Then compares the PCA scores for the ‘random’ genes with the observed PCA scores to determine statistical signifance. End result is a p-value for each gene’s association with each principal component. We identify significant PCs as those who have a strong enrichment of low p-value genes.
+
+```{r}
+bc.integrated <- JackStraw(bc.integrated, num.replicate = 100)
+bc.integrated <- ScoreJackStraw(bc.integrated, dims = 1:20)
+```
+
+```{r}
+JackStrawPlot(bc.integrated, dims = 1:15)
+```
+
+
+
+```{r}
+use.pcs = 1:7
+```
+
+
+```{r}
+save(bc.integrated,file="Data/GandT/RNA/SCEsets/Seurat.RData")
+```
+
+## Sesion information
+
+```{r}
+sessionInfo()
+```

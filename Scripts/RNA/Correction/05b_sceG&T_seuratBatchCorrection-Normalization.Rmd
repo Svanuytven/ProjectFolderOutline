@@ -1,0 +1,97 @@
+---
+title: "05b_sceG&T_seuratBatchCorrection-Normalization"
+author: "Sebastiaan Vanuytven"
+date: "28/08/2019"
+output: html_document
+---
+
+```{r "setup", include=FALSE}
+### Ignore code, this is used to set the workig directory. 
+rm(list=ls())
+t=getwd()
+tt=gsub('.{30}$', '', t)
+require("knitr")
+opts_knit$set(root.dir = tt)
+rm(t,tt)
+```
+
+# Setting Up the work environment
+
+
+## Specify necessary information 
+
+```{r}
+Colourblind_palette <- c( "#E69F00" , "#56B4E9" , "#009E73" , "#F0E442" , "#0072B2" , "#D55E00" , "#CC79A7" , "#000000" )
+```
+
+
+## Load the necessary libraries
+```{r include=FALSE}
+library(SingleCellExperiment)
+library(scater)
+library(ggplot2)
+library(tidyverse)
+library(scran)
+library(Seurat)
+set.seed(13)
+```
+
+## Load SCE object
+```{r}
+load("Data/RNA/MEL006/SCEsets/sce_qc")
+```
+
+
+# Convert singleCellExperiment object to Seurat
+
+## drop ERCCs
+
+```{r}
+endog_genes <- !rowData(sce_qc)$is_feature_control
+sce_qc=sce_qc[endog_genes, ]
+```
+
+
+```{r}
+bc_filtered <- as.Seurat(sce_qc)
+```
+
+# Integration of the batches
+
+```{r}
+bc.list <- SplitObject(bc_filtered, split.by = "method_timepoint")
+```
+
+```{r}
+for (i in 1:length(bc.list)) {
+    bc.list[[i]] <- NormalizeData(bc.list[[i]], verbose = FALSE, normalization.method = "LogNormalize", scale.factor = 10000)
+    bc.list[[i]] <- FindVariableFeatures(bc.list[[i]], selection.method = "vst", nfeatures = 2000, verbose = FALSE)
+}
+```
+
+```{r}
+bc.anchors <- FindIntegrationAnchors(object.list = bc.list, dims = 1:30, k.filter = 20)
+```
+
+```{r}
+bc.integrated <- IntegrateData(anchorset = bc.anchors, dims = 1:30)
+```
+
+```{r}
+DefaultAssay(bc.integrated) <- "integrated"
+bc.integrated <- ScaleData(bc.integrated, verbose = FALSE)
+```
+
+```{r}
+save(bc.integrated,file="Data/RNA/MEL006/SCEsets/Seurat_methodTimepoint.RData")
+```
+
+
+
+
+
+
+
+
+
+

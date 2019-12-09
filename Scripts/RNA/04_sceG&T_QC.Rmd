@@ -1,0 +1,285 @@
+---
+title: "04_sceG&T_QC"
+author: "Sebastiaan Vanuytven"
+date: "28/08/2019"
+output: html_document
+---
+
+```{r "setup", include=FALSE}
+### Ignore code, this is used to set the workig directory. 
+rm(list=ls())
+t=getwd()
+tt=gsub('.{18}$', '', t)
+require("knitr")
+opts_knit$set(root.dir = tt)
+rm(t,tt)
+```
+
+# Setting Up the work environment
+
+
+## Specify necessary information 
+
+```{r}
+Method <- "Manual" # can be Manual or MAD
+ERCCs <- "Yes" # Can be Yes or No
+Filtering <- "Manual" # Can be Manual or 10%
+
+## If manual method is preferred for cell filtering 
+cutoffCounts  <- 30000 # Advised number for SS2: 100.000
+cutoffGenes   <- 500   # Advised number for SS2: > 1000
+cutoffMt      <- 20     # Advised number for SS2: < 20-25%
+cutoffERCC    <- 10     # Advised number for SS2: < 10%
+
+## If manual method is preferred for gene filtering
+min_cells <- 5
+
+### Only to override when certain (consult your local bioinformatician)
+nrMAD <- 3 # only to be assigned if using the MAD methodology
+
+Colourblind_palette <- c( "#E69F00" , "#56B4E9" , "#009E73" , "#F0E442" , "#0072B2" , "#D55E00" , "#CC79A7" , "#000000" )
+```
+
+
+## Load the necessary libraries
+```{r include=FALSE}
+library(SingleCellExperiment)
+library(scater)
+library(ggplot2)
+library(tidyverse)
+library(edgeR)
+source("Scripts/GandT/RNA/Resources/plotting.R")
+set.seed(13)
+```
+
+## Load SCE object
+```{r}
+load("Data/GandT/RNA/SCEsets/sce")
+col_data <- as.data.frame(colData(sce))
+row_data <- as.data.frame(rowData(sce))
+```
+
+# QCing of cells to analyze
+
+## MANUAL 
+
+```{r}
+
+if (Method == "Manual") {
+  counts_out   <- sce$total_counts<(cutoffCounts-1)
+  features_out <- sce$total_features_by_counts < (cutoffGenes-1)
+  mt_out       <- sce$pct_counts_Mt > (cutoffMt)
+
+  kept <- !(counts_out | features_out | mt_out)
+  colData(sce)$Kept <- kept
+  
+  kable(tibble(
+    Type = c(
+        "Total counts",
+        "Total features",
+        "Mitochondrial %",
+        "Kept cells"
+    ),
+    Threshold = c(
+        paste("< ", cutoffCounts),
+        paste("< ", cutoffGenes),
+        paste("> ", cutoffMt),
+        ""
+    ),
+    Count = c(
+        sum(counts_out),
+        sum(features_out),
+        sum(mt_out),
+        sum(kept)
+    )
+))
+  
+  if (ERCCs == "Yes") {
+  ERCC_out       <- sce$pct_counts_ERCC > (cutoffERCC)
+  
+  kept <- !(counts_out | features_out | mt_out | ERCC_out)
+  colData(sce)$Kept <- kept
+  
+  kable(tibble(
+    Type = c(
+        "Total counts",
+        "Total features",
+        "Mitochondrial %",
+        "ERCC %",
+        "Kept cells"
+    ),
+    Threshold = c(
+        paste("< ", cutoffCounts),
+        paste("< ", cutoffGenes),
+        paste("> ", cutoffMt, "%"),
+        paste("> ", cutoffERCC, "%"),
+        ""
+    ),
+    Count = c(
+        sum(counts_out),
+        sum(features_out),
+        sum(mt_out),
+        sum(ERCC_out),
+        sum(kept)
+    )
+))
+  }
+}
+
+```
+
+
+## MAD
+
+```{r}
+if (Method == "MAD") {
+  counts_out   <- isOutlier(col_data$log10_total_counts, nmads = 3, type = "lower")
+  features_out <- isOutlier(col_data$log10_total_features_by_counts, nmads = 3, type = "lower")
+  mt_out       <- isOutlier(col_data$pct_counts_Mt, nmads = 3, type = "higher")
+  
+  counts_thresh   <- attr(counts_out, "thresholds")["lower"]
+  features_thresh <- attr(features_out, "thresholds")["lower"]
+  mt_thresh       <- attr(mt_out, "thresholds")["higher"]
+
+  kept <- !(counts_out | features_out | mt_out)
+  colData(sce)$Kept <- kept
+  
+  kable(tibble(
+    Type = c(
+        "Total counts",
+        "Total features",
+        "Mitochondrial %",
+        "Kept cells"
+    ),
+    Threshold = c(
+        paste("< 10 ^", round(counts_thresh, 2),
+              paste0("(", round(10 ^ counts_thresh), ")")),
+        paste("< 10 ^", round(features_thresh, 2),
+              paste0("(", round(10 ^ features_thresh), ")")),
+        paste(">", round(mt_thresh, 2), "%"),
+        ""
+    ),
+    Count = c(
+        sum(counts_out),
+        sum(features_out),
+        sum(mt_out),
+        sum(kept)
+    )
+))
+  
+  if (ERCCs == "Yes") {
+  ERCC_out       <- isOutlier(col_data$pct_counts_ERCC, nmads = 3, type = "higher")
+  ERCC_thresh    <- attr(ERCC_out, "thresholds")["higher"]
+  
+  kept <- !(counts_out | features_out | mt_out | ERCC_out)
+  colData(sce)$Kept <- kept
+  
+  kable(tibble(
+    Type = c(
+        "Total counts",
+        "Total features",
+        "Mitochondrial %",
+        "ERCC %",
+        "Kept cells"
+    ),
+    Threshold = c(
+        paste("< 10 ^", round(counts_thresh, 2),
+              paste0("(", round(10 ^ counts_thresh), ")")),
+        paste("< 10 ^", round(features_thresh, 2),
+              paste0("(", round(10 ^ features_thresh), ")")),
+        paste(">", round(mt_thresh, 2), "%"),
+        paste(">", round(ERCC_thresh, 2), "%"),
+        ""
+    ),
+    Count = c(
+        sum(counts_out),
+        sum(features_out),
+        sum(mt_out),
+        sum(ERCC_out),
+        sum(kept)
+    )
+))
+  }
+}
+```
+
+## Filter out bad quality cells
+
+```{r}
+sce_qc <- sce[, kept]
+```
+
+
+# Gene Filtering
+
+```{r}
+if (Filtering == "Manual") {
+  keep <- Matrix::rowSums(counts(sce_qc) >= 1) >= min_cells
+  sce_qc <- sce_qc[keep, ]
+} else if (Filtering == "10%") {
+  min_cells <- ceiling(ncol(sce)/10)
+  keep <- Matrix::rowSums(counts(sce_qc) >= 1) >= min_cells
+  sce_qc <- sce_qc[keep, ]
+}
+  
+```
+
+# Sanity check if we removed an interesting population with our QCíng
+
+One thing we can look at is the difference in expression between the kept and removed cells. If we see known genes that are highly expressed in the removed cells that can indicate that we have removed an interesting population of cells from the dataset. The red line shows equal expression and the blue line is a linear fit.
+
+```{r}
+pass_qc <- colnames(sce) %in% colnames(sce_qc)
+lost_counts <- counts(sce)[, !pass_qc]
+kept_counts <- counts(sce)[,  pass_qc]
+
+kept_lost <- tibble(
+    Gene     = rownames(sce),
+    Lost     = calcAverage(lost_counts),
+    LostProp = Matrix::rowSums(lost_counts > 0) / ncol(lost_counts),
+    Kept     = calcAverage(kept_counts),
+    KeptProp = Matrix::rowSums(kept_counts > 0) / ncol(kept_counts)
+) %>%
+    dplyr::mutate(LogFC = predFC(cbind(Lost, Kept),
+                          design = cbind(1, c(1, 0)))[, 2]) %>%
+    dplyr::mutate(LostCapped = pmax(Lost, min(Lost[Lost > 0]) * 0.5),
+           KeptCapped = pmax(Kept, min(Kept[Kept > 0]) * 0.5))
+
+ggplot(kept_lost,
+       aes(x = LostCapped, y = KeptCapped, colour = LostProp - KeptProp)) +
+    geom_point(size = 1, alpha = 0.2) +
+    geom_abline(intercept = 0, slope = 1, colour = "red") +
+    geom_smooth(method = "lm") +
+    scale_x_log10() +
+    scale_y_log10() +
+    scale_colour_viridis_c() +
+    ggtitle("Gene expression in kept and removed cells") +
+    xlab("Average count (removed)") +
+    ylab("Average count (kept)") +
+    theme_minimal()
+```
+
+```{r}
+kept_lost %>%
+    dplyr::select(Gene, LogFC, Lost, LostProp, Kept, KeptProp) %>%
+    dplyr::arrange(-LogFC) %>%
+    as.data.frame() %>%
+    head(10)
+```
+
+# removing the remaining controls
+
+```{r}
+#table(colData(sce_qc)$Nr_cells)
+#sce_qc <- sce_qc[,colData(sce_qc)$Nr_cells == "SC"  ]
+
+table(colData(sce_qc)$SCMCNC)
+sce_qc <- sce_qc[,colData(sce_qc)$Nr_cells == "SC"  ]
+```
+
+
+# Save SCE object after quality control
+
+```{r}
+save(sce_qc,file='Data/GandT/RNA/SCEsets/sce_qc')
+```

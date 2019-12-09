@@ -1,0 +1,106 @@
+---
+title: "05b_sceG&T_seuratBatchCorrection-Normalization"
+author: "Sebastiaan Vanuytven"
+date: "28/08/2019"
+output: html_document
+---
+
+```{r "setup", include=FALSE}
+### Ignore code, this is used to set the workig directory. 
+rm(list=ls())
+t=getwd()
+tt=gsub('.{30}$', '', t)
+require("knitr")
+opts_knit$set(root.dir = tt)
+rm(t,tt)
+```
+
+# Setting Up the work environment
+
+
+## Specify necessary information 
+
+```{r}
+Colourblind_palette <- c( "#E69F00" , "#56B4E9" , "#009E73" , "#F0E442" , "#0072B2" , "#D55E00" , "#CC79A7" , "#000000" )
+factors_toRegress <- c("pct_counts_Mt")
+```
+
+
+## Load the necessary libraries
+```{r include=FALSE}
+library(SingleCellExperiment)
+library(scater)
+library(ggplot2)
+library(tidyverse)
+library(scran)
+library(Seurat)
+set.seed(13)
+```
+
+## Load SCE object
+```{r}
+load("Data/GandT/RNA/SCEsets/sce_qc")
+```
+
+```{r}
+table(colData(sce_qc)$Sample)
+```
+
+
+# Convert singleCellExperiment object to Seurat
+
+## drop ERCCs
+
+```{r}
+endog_genes <- !rowData(sce_qc)$is_feature_control
+sce_qc=sce_qc[endog_genes, ]
+```
+
+
+```{r}
+bc_filtered <- as.Seurat(sce_qc)
+```
+
+## Normalization
+
+
+```{r}
+NormalizeData(bc_filtered, normalization.method = "LogNormalize", scale.factor = 10000)
+bc_filtered <- NormalizeData(bc_filtered)
+```
+
+## Identification of highly variable features (feature selection)
+
+```{r}
+bc_filtered <- FindVariableFeatures(bc_filtered, selection.method = "vst", nfeatures = 2000)
+
+# Identify the 10 most highly variable genes
+top10 <- head(VariableFeatures(bc_filtered), 10)
+
+# plot variable features with and without labels
+plot1 <- VariableFeaturePlot(bc_filtered)
+plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+CombinePlots(plots = list(plot1, plot2))
+```
+
+## Scale the data
+
+```{r}
+all.genes <- rownames(bc_filtered)
+bc.integrated <- ScaleData(bc_filtered, features = all.genes, vars.to.regress = factors_toRegress)
+```
+
+
+```{r}
+save(bc.integrated,file="Data/GandT/RNA/SCEsets/Seurat.RData")
+```
+
+
+
+
+
+
+
+
+
+

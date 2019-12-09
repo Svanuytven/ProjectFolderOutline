@@ -1,0 +1,97 @@
+---
+title: "02_sceG&T_ERCCexploration"
+author: "Sebastiaan Vanuytven"
+date: "28/08/2019"
+output: html_document
+---
+
+```{r "setup", include=FALSE}
+### Ignore code, this is used to set the workig directory. 
+rm(list=ls())
+t=getwd()
+tt=gsub('.{30}$', '', t)
+require("knitr")
+opts_knit$set(root.dir = tt)
+rm(t,tt)
+```
+
+# Setting Up the work environment
+
+## Load the necessary libraries
+```{r include=FALSE}
+library(SingleCellExperiment)
+library(plyr)
+library(reshape2)
+library(ggplot2)
+library(tidyverse)
+```
+
+## Load ERCC information and SCE object
+```{r}
+load("Data/RNA/MEL006/SCEsets/sce")
+ERCC <- read.table("Data/Resources/ERCC_lengths.txt", header = T, row.names = 1)
+```
+
+## Only select the ERCC spike ins
+
+```{r}
+ercc_data <- sce[rowData(sce)$is_feature_control_ERCC,] 
+```
+
+# ERCC correlation plots
+
+## Calculate number of plots to make
+
+```{r}
+Nrplots <- ceiling(ncol(sce)/96)
+```
+
+## Create Dataframe
+
+```{r}
+ERCCcounts <- assay(ercc_data)
+ERCCcounts <- (ERCCcounts*1000000)/colSums(ERCCcounts)
+cdf <- as.data.frame(ERCCcounts)
+#c <- c[rowSums(c) > 10,]
+cdf$input_conc <- ERCC[row.names(ERCCcounts),1]
+cdf$ercc_length <- ERCC[row.names(ERCCcounts),2]
+cdf$ercc_length_kb <- cdf$ercc_length/1000
+cdf$ercc_id <- row.names(cdf)
+
+meta <- cdf[,c("input_conc", "ercc_length", "ercc_length_kb", "ercc_id")]
+```
+
+## Make results folder
+
+```{bash}
+mkdir -p Results/MEL006/RNA/ERCCcor
+```
+
+
+## Plot 96sample overview plot
+
+```{r}
+for (i in 1:Nrplots) {
+  begin <- (1+(i-1)*96)
+  end <- 96+(i-1)*96
+  if (end > ncol(cdf) ) {
+    end <- ncol(cdf)
+  }
+  
+  SamplesToPlot <- cdf[, begin:end]
+  dataToPlot <- cbind(SamplesToPlot,meta)
+  
+  cdfm1 <- melt(dataToPlot,id=c("ercc_id","input_conc","ercc_length_kb"))
+  cdfm1$rpkm <- cdfm1$value/cdfm1$ercc_length_kb
+  cdfm1 <- cdfm1[cdfm1$variable != "ercc_length",]
+  
+  q <- ggplot(data=cdfm1) + geom_point(aes(x=log2(input_conc),y=log2(rpkm),colour=ercc_length_kb),size=3) +
+    ylim(0,25) + xlim(5,15)
+  q <- q + facet_wrap(~variable,ncol=12)
+  q <- q + xlab("Log2(Input Concentration)") + ylab("Log2(RPKM)")
+  q + theme_bw(base_size=8) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                                         axis.line = element_line(colour = "black"))
+  ggsave( paste0("Results/MEL006/RNA/ERCCcor/ERCCoverview_", i, ".png") , width = 20 , height = 10 )
+}
+```
+
